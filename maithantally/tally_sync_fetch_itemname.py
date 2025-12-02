@@ -3,11 +3,29 @@ import requests
 from lxml import etree
 import re
 from io import BytesIO
+from frappe.utils import get_url
 
-TALLY_URL = "http://192.168.1.41:9000"
+def get_active_tally_config():
+    config = frappe.db.get_all(
+        "Tally Configuration",
+        filters={"is_active": 1},
+        fields=["company", "url"],
+        limit=1
+    )
+    if not config:
+        config_url = get_url("/desk/tally-configuration-")
+        frappe.throw(f'No Active Tally Configuration found.<br>'
+                     f'<a href="{config_url}" target="_blank"><b>Click here to activate</b></a>')
+    return config[0]["company"], config[0]["url"]
+
+
+
+
+
 
 @frappe.whitelist() 
 def fetch_items():
+    company,TALLY_URL=get_active_tally_config()
     xml_request = """<ENVELOPE>
         <HEADER>
             <VERSION>1</VERSION>
@@ -37,7 +55,7 @@ def fetch_items():
         clean_xml = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", response.text)
         tree = BytesIO(clean_xml.encode("utf-8"))
 
-        item_count = 0
+        inserted_items=[]
 
         for event, elem in etree.iterparse(tree, events=("end",), recover=True):
             if elem.tag.upper().endswith("STOCKITEM"):
@@ -53,9 +71,9 @@ def fetch_items():
                     })
                     doc.insert(ignore_permissions=True)
                     frappe.db.commit()
-                    item_count += 1
+                    inserted_items.append(name)
 
-        return item_count     
+        return inserted_items
 
     except Exception as e:
         frappe.logger().error(f"Error fetching/parsing items: {e}")

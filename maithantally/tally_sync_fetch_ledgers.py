@@ -19,7 +19,7 @@ def get_active_tally_config():
         config_url = get_url("/desk/tally-configuration-")
         frappe.throw(f'No Active Tally Configuration found.<br>'
                      f'<a href="{config_url}" target="_blank"><b>Click here to activate</b></a>')
-    return config[0].company, config[0].url
+    return config[0]["company"], config[0]["url"]
 
 
 
