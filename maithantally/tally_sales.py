@@ -65,10 +65,12 @@ def send_to_tally(doc, method):
     <TALLYMESSAGE>
      <VOUCHER VCHTYPE="Sales" ACTION="Create" OBJVIEW="Invoice Voucher View">
         <DATE>{xml_date}</DATE>
+        <VOUCHERTYPENAME>{doc.voucher_type}</VOUCHERTYPENAME>
         <VOUCHERNUMBER>{doc.voucher_number}</VOUCHERNUMBER>
         <PARTYNAME>{doc.from_ledger}</PARTYNAME>
         <PARTYLEDGERNAME>{doc.from_ledger}</PARTYLEDGERNAME>
         <VCHENTRYMODE>Item Invoice</VCHENTRYMODE>
+        <NARRATION>{doc.narration}</NARRATION>
 
         {inventory_xml}
 
