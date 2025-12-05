@@ -2,7 +2,7 @@
  "actions": [],
  "allow_rename": 1,
  "autoname": "field:voucher_number",
- "creation": "2025-12-05 11:03:00.331880",
+ "creation": "2025-12-05 11:08:53.582318",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
@@ -10,13 +10,13 @@
   "voucher_type",
   "date",
   "narration",
-  "column_break_awyw",
+  "column_break_rzlv",
   "credit_ledger",
   "debit_ledger",
   "ledger_amount",
-  "section_break_hlkz",
+  "section_break_odxr",
   "tally_response",
-  "section_break_dvxt",
+  "section_break_bktr",
   "items"
  ],
  "fields": [
@@ -28,7 +28,7 @@
    "unique": 1
   },
   {
-   "default": "Sales Order",
+   "default": "Purchase Order",
    "fieldname": "voucher_type",
    "fieldtype": "Data",
    "in_list_view": 1,
@@ -44,11 +44,8 @@
   {
    "fieldname": "narration",
    "fieldtype": "Small Text",
+   "in_list_view": 1,
    "label": "Narration"
-  },
-  {
-   "fieldname": "column_break_awyw",
-   "fieldtype": "Column Break"
   },
   {
    "fieldname": "credit_ledger",
@@ -71,7 +68,16 @@
    "label": "Ledger Amount"
   },
   {
-   "fieldname": "section_break_dvxt",
+   "fieldname": "section_break_odxr",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "tally_response",
+   "fieldtype": "Small Text",
+   "label": "Tally Response"
+  },
+  {
+   "fieldname": "section_break_bktr",
    "fieldtype": "Section Break"
   },
   {
@@ -81,23 +87,17 @@
    "options": "Voucher Items"
   },
   {
-   "fieldname": "section_break_hlkz",
-   "fieldtype": "Section Break"
-  },
-  {
-   "fieldname": "tally_response",
-   "fieldtype": "Small Text",
-   "label": "Tally Response",
-   "read_only": 1
+   "fieldname": "column_break_rzlv",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-05 11:29:04.996194",
+ "modified": "2025-12-05 11:18:53.199192",
  "modified_by": "Administrator",
  "module": "Maithantally",
- "name": "Sales Order",
+ "name": "Purchase Order",
  "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [
