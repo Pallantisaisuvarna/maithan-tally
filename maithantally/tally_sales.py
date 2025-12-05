@@ -21,10 +21,20 @@ def get_active_tally_config():
 def send_to_tally(doc, method):
     company, TALLY_URL = get_active_tally_config()
 
-    if not doc.date or not doc.from_ledger or not doc.to_ledger or not doc.items:
+    if not doc.date or not doc.credit_ledger or not doc.debit_ledger or not doc.items:
         frappe.throw("All fields (Date, From Ledger, To Ledger, Items) are required")
 
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%Y%m%d")
+    credit_ledger = doc.credit_ledger
+    debit_ledger = doc.debit_ledger
+    amount = doc.ledger_amount
+    parent_from = frappe.db.get_value("Ledger", credit_ledger, "parent_ledger")
+    parent_to = frappe.db.get_value("Ledger", debit_ledger, "parent_ledger")
+    if parent_from in ["Sales Accounts"]:
+        credit_ledger = credit_ledger
+    else:
+        frappe.throw("For Sales, Credit ledger must be a Sales")
+
 
   
     inventory_xml = ""
@@ -40,7 +50,7 @@ def send_to_tally(doc, method):
             <RATE>{item.rate}</RATE>
             <AMOUNT>{item.amount}</AMOUNT>
             <ACCOUNTINGALLOCATIONS.LIST>
-                <LEDGERNAME>{doc.to_ledger}</LEDGERNAME>
+                <LEDGERNAME>{doc.credit_ledger}</LEDGERNAME>
                 <AMOUNT>{item.amount}</AMOUNT>
             </ACCOUNTINGALLOCATIONS.LIST>
         </ALLINVENTORYENTRIES.LIST>
@@ -67,15 +77,15 @@ def send_to_tally(doc, method):
         <DATE>{xml_date}</DATE>
         <VOUCHERTYPENAME>{doc.voucher_type}</VOUCHERTYPENAME>
         <VOUCHERNUMBER>{doc.voucher_number}</VOUCHERNUMBER>
-        <PARTYNAME>{doc.from_ledger}</PARTYNAME>
-        <PARTYLEDGERNAME>{doc.from_ledger}</PARTYLEDGERNAME>
+        <PARTYNAME>{doc.credit_ledger}</PARTYNAME>
+        <PARTYLEDGERNAME>{doc.credit_ledger}</PARTYLEDGERNAME>
         <VCHENTRYMODE>Item Invoice</VCHENTRYMODE>
         <NARRATION>{doc.narration}</NARRATION>
 
         {inventory_xml}
 
         <LEDGERENTRIES.LIST>
-            <LEDGERNAME>{doc.from_ledger}</LEDGERNAME>
+            <LEDGERNAME>{doc.debit_ledger}</LEDGERNAME>
             <AMOUNT>-{total_amount}</AMOUNT>
         </LEDGERENTRIES.LIST>
      </VOUCHER>

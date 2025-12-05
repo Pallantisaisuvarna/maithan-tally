@@ -22,25 +22,25 @@ def send_to_tally(doc, method):
     frappe.logger().info(doc.as_dict())
     company,TALLY_URL=get_active_tally_config()
 
-    if not doc.date or not doc.from_ledger or not doc.to_ledger or not doc.ledger_amount:
+    if not doc.date or not doc.debit_ledger or not doc.credit_ledger or not doc.ledger_amount:
         frappe.throw("All fields (Date, From Ledger, To Ledger, Amount) are required")
 
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%d-%b-%Y")
-    from_ledger = doc.from_ledger
-    to_ledger = doc.to_ledger
+    debit_ledger = doc.debit_ledger
+    credit_ledger = doc.credit_ledger
     amount = doc.ledger_amount
 
   
-    parent_from = frappe.db.get_value("Ledger", from_ledger, "parent_ledger")
-    parent_to = frappe.db.get_value("Ledger", to_ledger, "parent_ledger")
+    parent_from = frappe.db.get_value("Ledger", debit_ledger, "parent_ledger")
+    parent_to = frappe.db.get_value("Ledger", credit_ledger, "parent_ledger")
 
  
     if parent_from in ["Bank Accounts", "Cash-in-Hand"]:
-        debit_ledger = from_ledger
-        credit_ledger = to_ledger
+        debit_ledger = debit_ledger
+        credit_ledger = credit_ledger
     elif parent_to in ["Bank Accounts", "Cash-in-Hand"]:
-        debit_ledger = to_ledger
-        credit_ledger = from_ledger
+        debit_ledger = credit_ledger
+        credit_ledger = debit_ledger
     else:
         frappe.throw("For Receipt, one ledger must be a Bank or Cash ledger")
 
@@ -65,12 +65,12 @@ def send_to_tally(doc, method):
                         <VOUCHERNUMBER>{doc.voucher_number}</VOUCHERNUMBER>
                         <NARRATION>{doc.narration or ""}</NARRATION>
                         <ALLLEDGERENTRIES.LIST>
-                            <LEDGERNAME>{debit_ledger}</LEDGERNAME>
+                            <LEDGERNAME>{credit_ledger}</LEDGERNAME>
                             <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
                             <AMOUNT>{amount}</AMOUNT>
                         </ALLLEDGERENTRIES.LIST>
                         <ALLLEDGERENTRIES.LIST>
-                            <LEDGERNAME>{credit_ledger}</LEDGERNAME>
+                            <LEDGERNAME>{debit_ledger}</LEDGERNAME>
                             <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
                             <AMOUNT>-{amount}</AMOUNT>
                         </ALLLEDGERENTRIES.LIST>

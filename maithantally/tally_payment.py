@@ -26,23 +26,19 @@ def send_to_tally(doc, method):
     company,TALLY_URL=get_active_tally_config()
 
 
-    if not doc.date or not doc.from_ledger or not doc.to_ledger or not doc.ledger_amount:
+    if not doc.date or not doc.credit_ledger or not doc.debit_ledger or not doc.ledger_amount:
         frappe.throw("All fields (Date, From Ledger, To Ledger, Amount) are required")
 
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%d-%b-%Y")
-    from_ledger = doc.from_ledger
-    to_ledger = doc.to_ledger
+    credit_ledger = doc.credit_ledger
+    debit_ledger = doc.debit_ledger
     amount = doc.ledger_amount
-    parent_from = frappe.db.get_value("Ledger", from_ledger, "parent_ledger")
-    parent_to = frappe.db.get_value("Ledger", to_ledger, "parent_ledger")
+    parent_from = frappe.db.get_value("Ledger", credit_ledger, "parent_ledger")
+    parent_to = frappe.db.get_value("Ledger", debit_ledger, "parent_ledger")
     if parent_from in ["Bank Accounts", "Cash-in-Hand"]:
-        credit_ledger = from_ledger
-        debit_ledger = to_ledger
-    elif parent_to in ["Bank Accounts", "Cash-in-Hand"]:
-        credit_ledger = to_ledger
-        debit_ledger = from_ledger
+        credit_ledger = credit_ledger
     else:
-        frappe.throw("For Payment, one ledger must be a Bank or Cash ledger")
+        frappe.throw("For Payment, Credit ledger must be a Bank or Cash ledger")
 
     vch_type = "Payment"
 
@@ -66,13 +62,13 @@ def send_to_tally(doc, method):
                         <NARRATION>{doc.narration or ""}</NARRATION>
                         <ALLLEDGERENTRIES.LIST>
                             <LEDGERNAME>{debit_ledger}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-                            <AMOUNT>{amount}</AMOUNT>
+                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                            <AMOUNT>-{amount}</AMOUNT>
                         </ALLLEDGERENTRIES.LIST>
                         <ALLLEDGERENTRIES.LIST>
                             <LEDGERNAME>{credit_ledger}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                            <AMOUNT>-{amount}</AMOUNT>
+                            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+                            <AMOUNT>{amount}</AMOUNT>
                         </ALLLEDGERENTRIES.LIST>
                     </VOUCHER>
                 </TALLYMESSAGE>

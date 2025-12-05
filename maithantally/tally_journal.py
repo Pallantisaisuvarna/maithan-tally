@@ -27,10 +27,10 @@ def send_to_tally(doc, method):
     if not doc.date:
         frappe.throw("Date is required")
 
-    if not doc.from_ledger:
+    if not doc.credit_ledger:
         frappe.throw("From Ledger is required")
 
-    if not doc.to_ledger:
+    if not doc.debit_ledger:
         frappe.throw("To Ledger is required")
 
     if not doc.ledger_amount:
@@ -39,8 +39,8 @@ def send_to_tally(doc, method):
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%d-%b-%Y")
 
    
-    from_ledger = doc.from_ledger
-    to_ledger = doc.to_ledger
+    credit_ledger = doc.credit_ledger
+    debit_ledger = doc.debit_ledger
     amount = doc.ledger_amount
 
     xml = f"""
@@ -62,18 +62,18 @@ def send_to_tally(doc, method):
         <DATE>{xml_date}</DATE>
         <VOUCHERNUMBER>{doc.voucher_number}</VOUCHERNUMBER>
         <NARRATION>{doc.narration or ""}</NARRATION>
-        <PARTYLEDGERNAME>{to_ledger}</PARTYLEDGERNAME>
+        <PARTYLEDGERNAME>{debit_ledger}</PARTYLEDGERNAME>
 
         <ALLLEDGERENTRIES.LIST>
-            <LEDGERNAME>{to_ledger}</LEDGERNAME>
-            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-            <AMOUNT>{amount}</AMOUNT>
+            <LEDGERNAME>{debit_ledger}</LEDGERNAME>
+            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+            <AMOUNT>-{amount}</AMOUNT>
         </ALLLEDGERENTRIES.LIST>
 
         <ALLLEDGERENTRIES.LIST>
-            <LEDGERNAME>{from_ledger}</LEDGERNAME>
-            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-            <AMOUNT>-{amount}</AMOUNT>
+            <LEDGERNAME>{credit_ledger}</LEDGERNAME>
+            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+            <AMOUNT>{amount}</AMOUNT>
         </ALLLEDGERENTRIES.LIST>
 
         </VOUCHER>

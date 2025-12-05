@@ -28,9 +28,9 @@ def get_active_tally_config():
 def create_contra_voucher(doc, method):
     frappe.logger().info(doc.as_dict())
     company, TALLY_URL = get_active_tally_config()
-    if not doc.from_ledger:
+    if not doc.debit_ledger:
         frappe.throw("From Ledger is required")
-    if not doc.to_ledger:
+    if not doc.credit_ledger:
         frappe.throw("To Ledger is required")
     if not doc.ledger_amount:
         frappe.throw("Amount is required")
@@ -38,13 +38,13 @@ def create_contra_voucher(doc, method):
         frappe.throw("Voucher Number is required")
     if not doc.date:
         frappe.throw("Voucher Date is required")
-    from_ledger = doc.from_ledger
-    to_ledger = doc.to_ledger
+    debit_ledger = doc.debit_ledger
+    credit_ledger = doc.credit_ledger
     amount = abs(doc.ledger_amount)
-    if not validate_contra_ledgers(from_ledger):
-        frappe.throw(f"'{from_ledger}' is NOT allowed in Contra (only Cash/Bank allowed).")
-    if not validate_contra_ledgers(to_ledger):
-        frappe.throw(f"'{to_ledger}' is NOT allowed in Contra (only Cash/Bank allowed).")
+    if not validate_contra_ledgers(debit_ledger):
+        frappe.throw(f"'{debit_ledger}' is NOT allowed in Contra (only Cash/Bank allowed).")
+    if not validate_contra_ledgers(credit_ledger):
+        frappe.throw(f"'{credit_ledger}' is NOT allowed in Contra (only Cash/Bank allowed).")
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%Y%m%d")
     xml = f"""
     <ENVELOPE>
@@ -65,14 +65,14 @@ def create_contra_voucher(doc, method):
                         <VOUCHERNUMBER>{doc.voucher_number}</VOUCHERNUMBER>
                         <NARRATION>{doc.narration or ""}</NARRATION>
                         <ALLLEDGERENTRIES.LIST>
-                            <LEDGERNAME>{to_ledger}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-                            <AMOUNT>{amount}</AMOUNT>
-                        </ALLLEDGERENTRIES.LIST>
-                        <ALLLEDGERENTRIES.LIST>
-                            <LEDGERNAME>{from_ledger}</LEDGERNAME>
+                            <LEDGERNAME>{credit_ledger}</LEDGERNAME>
                             <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
                             <AMOUNT>-{amount}</AMOUNT>
+                        </ALLLEDGERENTRIES.LIST>
+                        <ALLLEDGERENTRIES.LIST>
+                            <LEDGERNAME>{debit_ledger}</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+                            <AMOUNT>{amount}</AMOUNT>
                         </ALLLEDGERENTRIES.LIST>
                     </VOUCHER>
                     </TALLYMESSAGE>
