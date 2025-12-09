@@ -24,7 +24,6 @@ def get_active_tally_config():
     return config[0].company, config[0].url
 
 
-
 def create_contra_voucher(doc, method):
     frappe.logger().info(doc.as_dict())
     company, TALLY_URL = get_active_tally_config()
@@ -38,14 +37,18 @@ def create_contra_voucher(doc, method):
         frappe.throw("Voucher Number is required")
     if not doc.date:
         frappe.throw("Voucher Date is required")
+
     debit_ledger = doc.debit_ledger
     credit_ledger = doc.credit_ledger
     amount = abs(doc.ledger_amount)
+
     if not validate_contra_ledgers(debit_ledger):
         frappe.throw(f"'{debit_ledger}' is NOT allowed in Contra (only Cash/Bank allowed).")
     if not validate_contra_ledgers(credit_ledger):
         frappe.throw(f"'{credit_ledger}' is NOT allowed in Contra (only Cash/Bank allowed).")
+
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%Y%m%d")
+
     xml = f"""
     <ENVELOPE>
         <HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>
@@ -67,7 +70,7 @@ def create_contra_voucher(doc, method):
                         <ALLLEDGERENTRIES.LIST>
                             <LEDGERNAME>{credit_ledger}</LEDGERNAME>
                             <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                            <AMOUNT>-{amount}</AMOUNT>
+                            <AMOUNT>{amount}</AMOUNT>
                         </ALLLEDGERENTRIES.LIST>
                         <ALLLEDGERENTRIES.LIST>
                             <LEDGERNAME>{debit_ledger}</LEDGERNAME>
@@ -77,7 +80,6 @@ def create_contra_voucher(doc, method):
                     </VOUCHER>
                     </TALLYMESSAGE>
                 </REQUESTDATA>
-
             </IMPORTDATA>
         </BODY>
     </ENVELOPE>
@@ -89,17 +91,15 @@ def create_contra_voucher(doc, method):
     try:
         headers = {"Content-Type": "text/xml"}
         response = requests.post(TALLY_URL, data=xml.encode("utf-8"), headers=headers)
-
         frappe.logger().info("Tally Response:")
         frappe.logger().info(response.text)
-
         doc.db_set("tally_response", response.text)
         doc.db_set("voucher_number", doc.voucher_number)
-
     except Exception as e:
         frappe.logger().error("Tally Error:")
         frappe.logger().error(str(e))
         doc.db_set("tally_response", f"ERROR: {str(e)}", update_modified=False)
+
 
 def delete_contra_voucher(doc, method):
     frappe.logger().info(doc.as_dict())
@@ -107,8 +107,10 @@ def delete_contra_voucher(doc, method):
         frappe.throw("Date is required")
     if not doc.voucher_number:
         frappe.throw("Voucher Number is required")
+
     company, TALLY_URL = get_active_tally_config()
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%d-%b-%Y")
+
     xml = f"""
     <ENVELOPE>
         <HEADER>
@@ -137,8 +139,10 @@ def delete_contra_voucher(doc, method):
         </BODY>
     </ENVELOPE>
     """
+
     frappe.logger().info("Generated XML for Tally (Delete):")
     frappe.logger().info(xml)
+
     try:
         headers = {"Content-Type": "text/xml"}
         response = requests.post(TALLY_URL, data=xml.encode("utf-8"), headers=headers)

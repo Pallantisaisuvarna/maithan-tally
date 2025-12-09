@@ -146,3 +146,6 @@ def delete_payment_voucher(doc, method):
         frappe.logger().error("Tally Error:")
         frappe.logger().error(str(e))
         doc.db_set("tally_response", f"ERROR: {str(e)}", update_modified=False)
+
+
+

@@ -180,10 +180,15 @@ doc_events = {
     },
     "Sales Order": {
     "after_insert": "maithantally.tally_sales_order.send_to_tally",
-    "on_cancel": "maithantally.tally_sales_order.delete_sales_order_voucher",
-    "after_delete": "maithantally.tally_sales_order.delete_sales_order_voucher"
+    "on_cancel":"maithantally.tally_sales_order.delete_sales_order",
+    "after_delete":"maithantally.tally_sales_order.delete_sales_order"
+    
+    },
+    "Purchase Order":{
+        "after_insert":"maithantally.tally_purchase_order.send_to_tally",
+        "on_cancel":"maithantally.tally_purchase_order.delete_purchase_order",
+        "after_delete":"maithantally.tally_purchase_order.delete_purchase_order"
     }
-
 
 
 }

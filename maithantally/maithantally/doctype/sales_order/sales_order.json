@@ -14,6 +14,8 @@
   "credit_ledger",
   "debit_ledger",
   "ledger_amount",
+  "order_no",
+  "order_due_date",
   "section_break_hlkz",
   "tally_response",
   "section_break_dvxt",
@@ -66,7 +68,7 @@
   },
   {
    "fieldname": "ledger_amount",
-   "fieldtype": "Float",
+   "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Ledger Amount"
   },
@@ -89,12 +91,22 @@
    "fieldtype": "Small Text",
    "label": "Tally Response",
    "read_only": 1
+  },
+  {
+   "fieldname": "order_due_date",
+   "fieldtype": "Date",
+   "label": "Order Due Date"
+  },
+  {
+   "fieldname": "order_no",
+   "fieldtype": "Int",
+   "label": "Order Number"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-05 11:29:04.996194",
+ "modified": "2025-12-09 01:39:32.082591",
  "modified_by": "Administrator",
  "module": "Maithantally",
  "name": "Sales Order",
