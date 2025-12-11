@@ -27,6 +27,7 @@ def get_active_tally_config():
 def create_contra_voucher(doc, method):
     frappe.logger().info(doc.as_dict())
     company, TALLY_URL = get_active_tally_config()
+
     if not doc.debit_ledger:
         frappe.throw("From Ledger is required")
     if not doc.credit_ledger:
@@ -46,6 +47,11 @@ def create_contra_voucher(doc, method):
         frappe.throw(f"'{debit_ledger}' is NOT allowed in Contra (only Cash/Bank allowed).")
     if not validate_contra_ledgers(credit_ledger):
         frappe.throw(f"'{credit_ledger}' is NOT allowed in Contra (only Cash/Bank allowed).")
+
+    credit_amount = amount
+    credit_deemed = "No"
+    debit_amount = -amount
+    debit_deemed = "Yes"
 
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%Y%m%d")
 
@@ -67,17 +73,20 @@ def create_contra_voucher(doc, method):
                         <DATE>{xml_date}</DATE>
                         <VOUCHERNUMBER>{doc.voucher_number}</VOUCHERNUMBER>
                         <NARRATION>{doc.narration or ""}</NARRATION>
+
                         <ALLLEDGERENTRIES.LIST>
                             <LEDGERNAME>{credit_ledger}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                            <AMOUNT>{amount}</AMOUNT>
+                            <ISDEEMEDPOSITIVE>{credit_deemed}</ISDEEMEDPOSITIVE>
+                            <AMOUNT>{credit_amount}</AMOUNT>
                         </ALLLEDGERENTRIES.LIST>
+
                         <ALLLEDGERENTRIES.LIST>
                             <LEDGERNAME>{debit_ledger}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-                            <AMOUNT>{amount}</AMOUNT>
+                            <ISDEEMEDPOSITIVE>{debit_deemed}</ISDEEMEDPOSITIVE>
+                            <AMOUNT>{debit_amount}</AMOUNT>
                         </ALLLEDGERENTRIES.LIST>
-                    </VOUCHER>
+
+                      </VOUCHER>
                     </TALLYMESSAGE>
                 </REQUESTDATA>
             </IMPORTDATA>

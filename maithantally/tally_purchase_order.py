@@ -124,7 +124,6 @@ def send_to_tally(doc, method=None):
 
         doc.db_set("tally_response", response.text)
 
-        frappe.msgprint(f"Tally Response:\n{response.text}")
         return response.text
 
     except requests.exceptions.RequestException as e:

@@ -5,7 +5,6 @@ import requests
 
 
 def get_active_tally_config():
-    """Fetches the active Tally configuration (Company and URL)."""
     config = frappe.db.get_all(
         "Tally Configuration",
         filters={"is_active": 1},
@@ -44,10 +43,8 @@ def send_to_tally(doc, method=None):
 
     for item in doc.items:
         uom = item.uom or ""
-
         item_rate = float(item.rate)
         item_amount = float(item.amount)
-
         sales_amount_negative = f"-{item_amount:.2f}"
 
         inventory_xml += f"""
@@ -72,6 +69,8 @@ def send_to_tally(doc, method=None):
     voucher_number = str(doc.voucher_number)
     reference = doc.order_no
     customer_amount_positive = f"{total_amount:.2f}"
+    total_amount_negative = f"-{total_amount:.2f}"
+
     xml_data = f"""
     <ENVELOPE>
         <HEADER>
@@ -100,12 +99,13 @@ def send_to_tally(doc, method=None):
 
                             {inventory_xml}
 
-                            <!-- CUSTOMER LEDGER ENTRY -->
                             <LEDGERENTRIES.LIST>
                                 <LEDGERNAME>{debit_ledger}</LEDGERNAME>
                                 <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
                                 <AMOUNT>{customer_amount_positive}</AMOUNT>
                             </LEDGERENTRIES.LIST>
+
+                            <AMOUNT>{total_amount_negative}</AMOUNT>
 
                         </VOUCHER>
                     </TALLYMESSAGE>
@@ -129,7 +129,6 @@ def send_to_tally(doc, method=None):
 
         doc.db_set("tally_response", response.text)
 
-        frappe.msgprint(f"Tally Response:\n{response.text}")
         return response.text
 
     except requests.exceptions.RequestException as e:
