@@ -1,0 +1,118 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:voucher_number",
+ "creation": "2025-11-23 19:06:39.762962",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "voucher_number",
+  "voucher_type",
+  "date",
+  "narration",
+  "column_break_lvhg",
+  "credit_ledger",
+  "debit_ledger",
+  "ledger_amount",
+  "is_pushed_to_tally",
+  "section_break_deum",
+  "tally_response"
+ ],
+ "fields": [
+  {
+   "fieldname": "voucher_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Voucher Number",
+   "unique": 1
+  },
+  {
+   "default": "Journal",
+   "fieldname": "voucher_type",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Voucher Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date"
+  },
+  {
+   "fieldname": "narration",
+   "fieldtype": "Small Text",
+   "label": "Narration"
+  },
+  {
+   "fieldname": "column_break_lvhg",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "credit_ledger",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Credit Ledger",
+   "options": "Ledger"
+  },
+  {
+   "fieldname": "debit_ledger",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Debit Ledger",
+   "options": "Ledger"
+  },
+  {
+   "fieldname": "ledger_amount",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Ledger Amount"
+  },
+  {
+   "fieldname": "section_break_deum",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "tally_response",
+   "fieldtype": "Small Text",
+   "label": "Tally Response",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_pushed_to_tally",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Pushed To Tally"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-12-15 12:19:53.063016",
+ "modified_by": "Administrator",
+ "module": "Maithantally",
+ "name": "Journal Voucher",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

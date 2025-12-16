@@ -146,27 +146,6 @@ app_license = "mit"
 #     }
 # }
 doc_events = {
-    "Contra Voucher": {
-        "after_insert": "maithantally.tally_connector.create_contra_voucher",
-        "on_cancel": "maithantally.tally_connector.delete_contra_voucher",
-        "after_delete": "maithantally.tally_connector.delete_contra_voucher"
-    },
-    "Journal Voucher": {
-        "after_insert": "maithantally.tally_journal.send_to_tally",
-        "on_cancel": "maithantally.tally_journal.delete_journal_voucher",
-        "after_delete": "maithantally.tally_journal.delete_journal_voucher"
-    },
-    "Payment Voucher": {
-        "after_insert": "maithantally.tally_payment.send_to_tally",
-        "on_cancel":"maithantally.tally_payment.delete_payment_voucher",
-        "after_delete":"maithantally.tally_payment.delete_payment_voucher"
-
-    },
-    "Receipt Voucher": {
-        "after_insert": "maithantally.tally_receipt.send_to_tally",
-        "on_cancel":"maithantally.tally_receipt.delete_receipt_voucher",
-        "after_delete":"maithantally.tally_receipt.delete_receipt_voucher"
-    },
     "Sales Voucher": {
         "after_insert":"maithantally.tally_sales.send_to_tally",
         "on_cancel":"maithantally.tally_sales.delete_sales_voucher",
@@ -214,6 +193,15 @@ doc_events = {
 # 		"maithantally.tasks.monthly"
 # 	],
 # }
+
+# hooks.py
+scheduler_events = {
+    "cron": {
+        "51 17 * * *": [  # 17 = 5 PM, 41 = minute
+            "maithantally.tally.sync_contra_vouchers"
+        ]
+    }
+}
 
 # Testing
 # -------

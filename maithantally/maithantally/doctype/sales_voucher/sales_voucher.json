@@ -1,0 +1,129 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:voucher_number",
+ "creation": "2025-11-23 19:14:19.624084",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "voucher_number",
+  "voucher_type",
+  "date",
+  "narration",
+  "column_break_wdit",
+  "credit_ledger",
+  "debit_ledger",
+  "ledger_amount",
+  "sales_order_reference",
+  "section_break_icvc",
+  "tally_response",
+  "section_break_fhid",
+  "items"
+ ],
+ "fields": [
+  {
+   "fieldname": "voucher_number",
+   "fieldtype": "Data",
+   "label": "Voucher Number",
+   "unique": 1
+  },
+  {
+   "default": "Sales",
+   "fieldname": "voucher_type",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Voucher Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date"
+  },
+  {
+   "fieldname": "narration",
+   "fieldtype": "Small Text",
+   "label": "Narration"
+  },
+  {
+   "fieldname": "column_break_wdit",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "credit_ledger",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Credit Ledger",
+   "options": "Ledger"
+  },
+  {
+   "fieldname": "debit_ledger",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Debit Ledger",
+   "options": "Ledger"
+  },
+  {
+   "fieldname": "ledger_amount",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Ledger Amount"
+  },
+  {
+   "fieldname": "sales_order_reference",
+   "fieldtype": "Link",
+   "label": "Sales Order Reference",
+   "options": "Sales Order",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_icvc",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "tally_response",
+   "fieldtype": "Small Text",
+   "label": "Tally Response",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_fhid",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Voucher Items"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-12-12 14:21:32.366780",
+ "modified_by": "Administrator",
+ "module": "Maithantally",
+ "name": "Sales Voucher",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
