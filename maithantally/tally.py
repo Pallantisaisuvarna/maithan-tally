@@ -7,7 +7,7 @@ import io
 
 
 def sync_contra_vouchers():
-    tally_url = "http://192.168.1.67:9000/"
+    tally_url = "http://192.168.1.40:9000/"
 
     tally_payload = """<ENVELOPE>
   <HEADER>
@@ -94,12 +94,29 @@ def sync_contra_vouchers():
             ledger_name = elem_text(entry, "LEDGERNAME")
             amt = parse_amount(elem_text(entry, "AMOUNT"))
 
-            if amt < 0:
-                debit_ledger = ledger_name
-                amount = abs(amt)
-            elif amt > 0:
-                credit_ledger = ledger_name
-                amount = amt
+            if vch_type in ("Journal", "Contra"):
+                if amt < 0:
+                    debit_ledger = ledger_name
+                    amount = abs(amt)
+                elif amt > 0:
+                    credit_ledger = ledger_name
+                    amount = amt
+
+            elif vch_type == "Payment":
+                if amt < 0:
+                    debit_ledger = ledger_name
+                    amount = abs(amt)
+                elif amt > 0:
+                    credit_ledger = ledger_name
+                    amount = amt
+
+            elif vch_type == "Receipt":
+                if amt < 0:
+                    debit_ledger = ledger_name
+                    amount = abs(amt)
+                elif amt > 0:
+                    credit_ledger = ledger_name
+                    amount = amt
 
         if not debit_ledger or not credit_ledger:
             voucher.clear()
