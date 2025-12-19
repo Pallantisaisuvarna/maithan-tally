@@ -4,7 +4,9 @@ import frappe
 from datetime import datetime
 from frappe.utils import get_url
 
+
 class PaymentVoucher(Document):
+
     def after_insert(self):
         if self.is_pushed_to_tally:
             return
@@ -17,29 +19,32 @@ class PaymentVoucher(Document):
             return
         if not self.is_pushed_to_tally:
             return
-        if not self.has_value_changed(
-            ["credit_ledger", "debit_ledger", "ledger_amount", "date", "narration"]
-        ):
-            return
         push_to_tally(self, action="Alter")
 
     def on_trash(self):
         delete_from_tally(self)
 
-    def has_value_changed(self, fields):
-        before = self.get_doc_before_save()
-        if not before:
-            return False
-        for field in fields:
-            old = before.get(field)
-            new = self.get(field)
-            if hasattr(old, "strftime"):
-                old = old.strftime("%Y-%m-%d")
-            if hasattr(new, "strftime"):
-                new = new.strftime("%Y-%m-%d")
-            if old != new:
-                return True
-        return False
+
+def validate_payment_entries(doc):
+    has_cash_or_bank = False
+
+    for row in doc.voucher_ledger_entry:
+        parent_ledger = frappe.db.get_value(
+            "Ledger",
+            row.ledger,
+            "parent_ledger"
+        )
+
+        if parent_ledger in ("Cash-in-Hand", "Bank Accounts"):
+            has_cash_or_bank = True
+            break
+
+    if not has_cash_or_bank:
+        frappe.throw(
+            "Payment Voucher must contain at least one "
+            "<b>Cash-in-Hand</b> or <b>Bank Accounts</b> ledger"
+        )
+
 
 def get_active_tally_config():
     config = frappe.db.get_all(
@@ -48,118 +53,122 @@ def get_active_tally_config():
         fields=["company", "url"],
         limit=1
     )
+
     if not config:
         config_url = get_url("/desk/tally-configuration-")
-        frappe.throw(f'No Active Tally Configuration found.<br>'
-                     f'<a href="{config_url}" target="_blank"><b>Click here to activate</b></a>')
-    return config[0].company, config[0].url
+        frappe.throw(
+            f'No Active Tally Configuration found.<br>'
+            f'<a href="{config_url}" target="_blank"><b>Click here to activate</b></a>'
+        )
 
+    return config[0].company, config[0].url
+def build_payment_ledger_xml(doc):
+    xml = ""
+
+    for row in doc.voucher_ledger_entry:
+        amt = abs(row.ledger_amount)
+
+        if row.entry_type == "Credit":
+            xml += f"""
+<ALLLEDGERENTRIES.LIST>
+    <LEDGERNAME>{row.ledger}</LEDGERNAME>
+    <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+    <AMOUNT>{amt}</AMOUNT>
+</ALLLEDGERENTRIES.LIST>
+"""
+        else:  # Debit
+            xml += f"""
+<ALLLEDGERENTRIES.LIST>
+    <LEDGERNAME>{row.ledger}</LEDGERNAME>
+    <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+    <AMOUNT>-{amt}</AMOUNT>
+</ALLLEDGERENTRIES.LIST>
+"""
+
+    return xml
 def push_to_tally(doc, action):
     company, TALLY_URL = get_active_tally_config()
-    if not doc.date or not doc.credit_ledger or not doc.debit_ledger or not doc.ledger_amount:
-        frappe.throw("All fields (Date, From Ledger, To Ledger, Amount) are required")
+    validate_payment_entries(doc)
 
-    parent_from = frappe.db.get_value("Ledger", doc.credit_ledger, "parent_ledger")
-    parent_to = frappe.db.get_value("Ledger", doc.debit_ledger, "parent_ledger")
+    if not doc.date or not doc.voucher_ledger_entry:
+        frappe.throw("Date and Ledger Entries are mandatory")
 
-    if parent_from in ["Bank Accounts", "Cash-in-Hand"]:
-        credit_ledger = doc.credit_ledger
-    else:
-        frappe.throw("For Payment, Credit ledger must be a Bank or Cash ledger")
-
-    debit_ledger = doc.debit_ledger
-    amount = abs(doc.ledger_amount)
-    vch_type = doc.voucher_type or "Payment"
+    ledger_xml = build_payment_ledger_xml(doc)
+    xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%d-%b-%Y")
+    vch_type = "Payment"
 
     if action == "Create":
-        xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%Y%m%d")
         xml = f"""
-        <ENVELOPE>
-            <HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>
-            <BODY>
-                <IMPORTDATA>
-                    <REQUESTDESC>
-                        <REPORTNAME>Vouchers</REPORTNAME>
-                        <STATICVARIABLES>
-                            <SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>
-                        </STATICVARIABLES>
-                    </REQUESTDESC>
-                    <REQUESTDATA>
-                        <TALLYMESSAGE>
-                            <VOUCHER VCHTYPE="{vch_type}" ACTION="Create">
-                                <VOUCHERTYPENAME>{vch_type}</VOUCHERTYPENAME>
-                                <DATE>{xml_date}</DATE>
-                                <VOUCHERNUMBER>{doc.voucher_number}</VOUCHERNUMBER>
-                                <NARRATION>{doc.narration or ""}</NARRATION>
-                                <ALLLEDGERENTRIES.LIST>
-                                    <LEDGERNAME>{debit_ledger}</LEDGERNAME>
-                                    <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                                    <AMOUNT>-{amount}</AMOUNT>
-                                </ALLLEDGERENTRIES.LIST>
-                                <ALLLEDGERENTRIES.LIST>
-                                    <LEDGERNAME>{credit_ledger}</LEDGERNAME>
-                                    <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-                                    <AMOUNT>{amount}</AMOUNT>
-                                </ALLLEDGERENTRIES.LIST>
-                            </VOUCHER>
-                        </TALLYMESSAGE>
-                    </REQUESTDATA>
-                </IMPORTDATA>
-            </BODY>
-        </ENVELOPE>
-        """
+<ENVELOPE>
+    <HEADER>
+        <TALLYREQUEST>Import Data</TALLYREQUEST>
+    </HEADER>
+    <BODY>
+        <IMPORTDATA>
+            <REQUESTDESC>
+                <REPORTNAME>Vouchers</REPORTNAME>
+                <STATICVARIABLES>
+                    <SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>
+                </STATICVARIABLES>
+            </REQUESTDESC>
+            <REQUESTDATA>
+                <TALLYMESSAGE>
+                    <VOUCHER VCHTYPE="{vch_type}" ACTION="Create">
+                        <VOUCHERTYPENAME>{vch_type}</VOUCHERTYPENAME>
+                        <DATE>{xml_date}</DATE>
+                        <VOUCHERNUMBER>{doc.voucher_number}</VOUCHERNUMBER>
+                        <NARRATION>{doc.narration or ""}</NARRATION>
+                        {ledger_xml}
+                    </VOUCHER>
+                </TALLYMESSAGE>
+            </REQUESTDATA>
+        </IMPORTDATA>
+    </BODY>
+</ENVELOPE>
+"""
     else:
-        xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%d-%b-%Y")
         xml = f"""
-        <ENVELOPE>
-            <HEADER>
-                <VERSION>1</VERSION>
-                <TALLYREQUEST>Import</TALLYREQUEST>
-                <TYPE>Data</TYPE>
-                <ID>Vouchers</ID>
-            </HEADER>
-            <BODY>
-                <DESC>
-                    <STATICVARIABLES>
-                        <SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>
-                    </STATICVARIABLES>
-                </DESC>
-                <DATA>
-                    <TALLYMESSAGE>
-                        <VOUCHER
-                            DATE="{xml_date}"
-                            TAGNAME="Voucher Number"
-                            TAGVALUE="{doc.voucher_number}"
-                            ACTION="{action}"
-                            VCHTYPE="Payment">
-                            <NARRATION>{doc.narration or ""}</NARRATION>
-                            <ALLLEDGERENTRIES.LIST>
-                                <LEDGERNAME>{debit_ledger}</LEDGERNAME>
-                                <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                                <AMOUNT>-{amount}</AMOUNT>
-                            </ALLLEDGERENTRIES.LIST>
-                            <ALLLEDGERENTRIES.LIST>
-                                <LEDGERNAME>{credit_ledger}</LEDGERNAME>
-                                <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-                                <AMOUNT>{amount}</AMOUNT>
-                            </ALLLEDGERENTRIES.LIST>
-                        </VOUCHER>
-                    </TALLYMESSAGE>
-                </DATA>
-            </BODY>
-        </ENVELOPE>
-        """
+<ENVELOPE>
+    <HEADER>
+        <VERSION>1</VERSION>
+        <TALLYREQUEST>Import</TALLYREQUEST>
+        <TYPE>Data</TYPE>
+        <ID>Vouchers</ID>
+    </HEADER>
+    <BODY>
+        <DESC>
+            <STATICVARIABLES>
+                <SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>
+            </STATICVARIABLES>
+        </DESC>
+        <DATA>
+            <TALLYMESSAGE>
+                <VOUCHER
+                    DATE="{xml_date}"
+                    TAGNAME="Voucher Number"
+                    TAGVALUE="{doc.voucher_number}"
+                    ACTION="Alter"
+                    VCHTYPE="{vch_type}">
+                    <NARRATION>{doc.narration or ""}</NARRATION>
+                    {ledger_xml}
+                </VOUCHER>
+            </TALLYMESSAGE>
+        </DATA>
+    </BODY>
+</ENVELOPE>
+"""
 
     response = requests.post(
         TALLY_URL,
         data=xml.encode("utf-8"),
         headers={"Content-Type": "text/xml"}
     )
-    doc.db_set("tally_response", response.text, update_modified=False)
 
+    doc.db_set("tally_response", response.text, update_modified=False)
 def delete_from_tally(doc):
     company, TALLY_URL = get_active_tally_config()
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%d-%b-%Y")
+
     xml = f"""
 <ENVELOPE>
     <HEADER>
@@ -188,12 +197,11 @@ def delete_from_tally(doc):
     </BODY>
 </ENVELOPE>
 """
-    try:
-        response = requests.post(
-            TALLY_URL,
-            data=xml.encode("utf-8"),
-            headers={"Content-Type": "text/xml"}
-        )
-        doc.db_set("tally_response", response.text, update_modified=False)
-    except Exception as e:
-        doc.db_set("tally_response", f"ERROR: {str(e)}", update_modified=False)
+
+    response = requests.post(
+        TALLY_URL,
+        data=xml.encode("utf-8"),
+        headers={"Content-Type": "text/xml"}
+    )
+
+    doc.db_set("tally_response", response.text, update_modified=False)

@@ -9,12 +9,11 @@
   "voucher_number",
   "voucher_type",
   "date",
-  "narration",
   "column_break_dexz",
-  "credit_ledger",
-  "debit_ledger",
-  "ledger_amount",
+  "narration",
   "is_pushed_to_tally",
+  "section_break_emvy",
+  "voucher_ledger_entry",
   "section_break_ffcj",
   "tally_response"
  ],
@@ -50,26 +49,6 @@
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "credit_ledger",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Credit Ledger",
-   "options": "Ledger"
-  },
-  {
-   "fieldname": "debit_ledger",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Debit Ledger",
-   "options": "Ledger"
-  },
-  {
-   "fieldname": "ledger_amount",
-   "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Ledger Amount"
-  },
-  {
    "fieldname": "section_break_ffcj",
    "fieldtype": "Section Break"
   },
@@ -85,12 +64,22 @@
    "fieldtype": "Check",
    "hidden": 1,
    "label": "Is Pushed To Tally"
+  },
+  {
+   "fieldname": "section_break_emvy",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "voucher_ledger_entry",
+   "fieldtype": "Table",
+   "label": "Voucher Ledger Entry",
+   "options": "Voucher Ledger Entry"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-15 12:35:02.980113",
+ "modified": "2025-12-19 15:01:02.302183",
  "modified_by": "Administrator",
  "module": "Maithantally",
  "name": "Payment Voucher",

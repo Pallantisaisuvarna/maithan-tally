@@ -42,6 +42,7 @@
   {
    "fieldname": "narration",
    "fieldtype": "Small Text",
+   "in_list_view": 1,
    "label": "Narration"
   },
   {
@@ -79,7 +80,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-18 12:07:51.962870",
+ "modified": "2025-12-18 18:01:39.593159",
  "modified_by": "Administrator",
  "module": "Maithantally",
  "name": "Contra Voucher",

@@ -19,29 +19,31 @@ class ReceiptVoucher(Document):
             return
         if not self.is_pushed_to_tally:
             return
-        if not self.has_value_changed(
-            ["credit_ledger", "debit_ledger", "ledger_amount", "date", "narration"]
-        ):
-            return
         push_to_tally(self, action="Alter")
 
     def on_trash(self):
         delete_from_tally(self)
 
-    def has_value_changed(self, fields):
-        before = self.get_doc_before_save()
-        if not before:
-            return False
-        for field in fields:
-            old = before.get(field)
-            new = self.get(field)
-            if hasattr(old, "strftime"):
-                old = old.strftime("%Y-%m-%d")
-            if hasattr(new, "strftime"):
-                new = new.strftime("%Y-%m-%d")
-            if old != new:
-                return True
-        return False
+
+def validate_receipt_entries(doc):
+    has_cash_or_bank = False
+
+    for row in doc.voucher_ledger_entry:
+        parent_ledger = frappe.db.get_value(
+            "Ledger",
+            row.ledger,
+            "parent_ledger"
+        )
+
+        if parent_ledger in ("Cash-in-Hand", "Bank Accounts"):
+            has_cash_or_bank = True
+            break
+
+    if not has_cash_or_bank:
+        frappe.throw(
+            "Receipt Voucher must contain at least one "
+            "<b>Cash-in-Hand</b> or <b>Bank Accounts</b> ledger"
+        )
 
 
 def get_active_tally_config():
@@ -51,40 +53,56 @@ def get_active_tally_config():
         fields=["company", "url"],
         limit=1
     )
+
     if not config:
         config_url = get_url("/desk/tally-configuration-")
-        frappe.throw(f'No Active Tally Configuration found.<br>'
-                     f'<a href="{config_url}" target="_blank"><b>Click here to activate</b></a>')
+        frappe.throw(
+            f'No Active Tally Configuration found.<br>'
+            f'<a href="{config_url}" target="_blank"><b>Click here to activate</b></a>'
+        )
+
     return config[0].company, config[0].url
+def build_receipt_ledger_xml(doc):
+    xml = ""
 
+    for row in doc.voucher_ledger_entry:
+        amt = abs(row.ledger_amount)
 
+        if row.entry_type == "Credit":
+            xml += f"""
+<ALLLEDGERENTRIES.LIST>
+    <LEDGERNAME>{row.ledger}</LEDGERNAME>
+    <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+    <AMOUNT>{amt}</AMOUNT>
+</ALLLEDGERENTRIES.LIST>
+"""
+        else:  # Debit
+            xml += f"""
+<ALLLEDGERENTRIES.LIST>
+    <LEDGERNAME>{row.ledger}</LEDGERNAME>
+    <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+    <AMOUNT>-{amt}</AMOUNT>
+</ALLLEDGERENTRIES.LIST>
+"""
+
+    return xml
 def push_to_tally(doc, action):
     company, TALLY_URL = get_active_tally_config()
+    validate_receipt_entries(doc)
 
-    if not doc.date or not doc.debit_ledger or not doc.credit_ledger or not doc.ledger_amount:
-        frappe.throw("All fields (Date, From Ledger, To Ledger, Amount) are required")
+    if not doc.date or not doc.voucher_ledger_entry:
+        frappe.throw("Date and Ledger Entries are mandatory")
 
-    debit_ledger = doc.debit_ledger
-    credit_ledger = doc.credit_ledger
-    amount = abs(doc.ledger_amount)
-
-    parent_from = frappe.db.get_value("Ledger", debit_ledger, "parent_ledger")
-    parent_to = frappe.db.get_value("Ledger", credit_ledger, "parent_ledger")
-
-    if parent_from in ["Bank Accounts", "Cash-in-Hand"]:
-        pass
-    elif parent_to in ["Bank Accounts", "Cash-in-Hand"]:
-        debit_ledger, credit_ledger = credit_ledger, debit_ledger
-    else:
-        frappe.throw("For Receipt, one ledger must be a Bank or Cash ledger")
-
-    vch_type = "Receipt"
+    ledger_xml = build_receipt_ledger_xml(doc)
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%d-%b-%Y")
+    vch_type = "Receipt"
 
     if action == "Create":
         xml = f"""
 <ENVELOPE>
-    <HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>
+    <HEADER>
+        <TALLYREQUEST>Import Data</TALLYREQUEST>
+    </HEADER>
     <BODY>
         <IMPORTDATA>
             <REQUESTDESC>
@@ -100,16 +118,7 @@ def push_to_tally(doc, action):
                         <DATE>{xml_date}</DATE>
                         <VOUCHERNUMBER>{doc.voucher_number}</VOUCHERNUMBER>
                         <NARRATION>{doc.narration or ""}</NARRATION>
-                        <ALLLEDGERENTRIES.LIST>
-                            <LEDGERNAME>{credit_ledger}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-                            <AMOUNT>{amount}</AMOUNT>
-                        </ALLLEDGERENTRIES.LIST>
-                        <ALLLEDGERENTRIES.LIST>
-                            <LEDGERNAME>{debit_ledger}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                            <AMOUNT>-{amount}</AMOUNT>
-                        </ALLLEDGERENTRIES.LIST>
+                        {ledger_xml}
                     </VOUCHER>
                 </TALLYMESSAGE>
             </REQUESTDATA>
@@ -117,7 +126,7 @@ def push_to_tally(doc, action):
     </BODY>
 </ENVELOPE>
 """
-    else:  
+    else:
         xml = f"""
 <ENVELOPE>
     <HEADER>
@@ -138,41 +147,28 @@ def push_to_tally(doc, action):
                     DATE="{xml_date}"
                     TAGNAME="Voucher Number"
                     TAGVALUE="{doc.voucher_number}"
-                    ACTION="{action}"
+                    ACTION="Alter"
                     VCHTYPE="{vch_type}">
                     <NARRATION>{doc.narration or ""}</NARRATION>
-                    <ALLLEDGERENTRIES.LIST>
-                        <LEDGERNAME>{credit_ledger}</LEDGERNAME>
-                        <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-                        <AMOUNT>{amount}</AMOUNT>
-                    </ALLLEDGERENTRIES.LIST>
-                    <ALLLEDGERENTRIES.LIST>
-                        <LEDGERNAME>{debit_ledger}</LEDGERNAME>
-                        <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                        <AMOUNT>-{amount}</AMOUNT>
-                    </ALLLEDGERENTRIES.LIST>
+                    {ledger_xml}
                 </VOUCHER>
             </TALLYMESSAGE>
         </DATA>
     </BODY>
 </ENVELOPE>
 """
-    try:
-        response = requests.post(
-            TALLY_URL,
-            data=xml.encode("utf-8"),
-            headers={"Content-Type": "text/xml"}
-        )
-        doc.db_set("tally_response", response.text, update_modified=False)
-    except Exception as e:
-        doc.db_set("tally_response", f"ERROR: {str(e)}", update_modified=False)
 
+    response = requests.post(
+        TALLY_URL,
+        data=xml.encode("utf-8"),
+        headers={"Content-Type": "text/xml"}
+    )
 
-
-
+    doc.db_set("tally_response", response.text, update_modified=False)
 def delete_from_tally(doc):
     company, TALLY_URL = get_active_tally_config()
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%d-%b-%Y")
+
     xml = f"""
 <ENVELOPE>
     <HEADER>
@@ -201,12 +197,11 @@ def delete_from_tally(doc):
     </BODY>
 </ENVELOPE>
 """
-    try:
-        response = requests.post(
-            TALLY_URL,
-            data=xml.encode("utf-8"),
-            headers={"Content-Type": "text/xml"}
-        )
-        doc.db_set("tally_response", response.text, update_modified=False)
-    except Exception as e:
-        doc.db_set("tally_response", f"ERROR: {str(e)}", update_modified=False)
+
+    response = requests.post(
+        TALLY_URL,
+        data=xml.encode("utf-8"),
+        headers={"Content-Type": "text/xml"}
+    )
+
+    doc.db_set("tally_response", response.text, update_modified=False)
