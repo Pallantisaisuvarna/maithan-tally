@@ -28,7 +28,7 @@ def is_same_voucher(doc, voucher_date, narration, ledger_rows):
     return normalize(existing_rows) == normalize(ledger_rows)
 
 def sync_contra_vouchers():
-    tally_url = "http://192.168.1.46:9000"
+    tally_url = "http://192.168.1.61:9000"
     tally_payload = """<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>

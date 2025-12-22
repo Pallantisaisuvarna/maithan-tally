@@ -185,7 +185,6 @@ def push_to_tally(doc, action):
 </ENVELOPE>
 """
 
-    print(xml)
 
     response = requests.post(
         TALLY_URL,
@@ -194,7 +193,7 @@ def push_to_tally(doc, action):
     )
 
   
-    print(response.text)
+   
 
     doc.db_set("tally_response", response.text, update_modified=False)
 
@@ -237,7 +236,7 @@ def delete_from_tally(doc):
 """
 
  
-    print(xml)
+   
 
     response = requests.post(
         TALLY_URL,
@@ -246,6 +245,6 @@ def delete_from_tally(doc):
     )
 
   
-    print(response.text)
+  
 
     doc.db_set("tally_response", response.text, update_modified=False)

@@ -62,21 +62,18 @@ def get_active_tally_config():
         )
 
     return config[0].company, config[0].url
+
+
+
+
 def build_payment_ledger_xml(doc):
     xml = ""
 
     for row in doc.voucher_ledger_entry:
         amt = abs(row.ledger_amount)
 
-        if row.entry_type == "Credit":
-            xml += f"""
-<ALLLEDGERENTRIES.LIST>
-    <LEDGERNAME>{row.ledger}</LEDGERNAME>
-    <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-    <AMOUNT>{amt}</AMOUNT>
-</ALLLEDGERENTRIES.LIST>
-"""
-        else:  # Debit
+        if row.entry_type == "Debit":
+            # Expense / Party (DEBIT)
             xml += f"""
 <ALLLEDGERENTRIES.LIST>
     <LEDGERNAME>{row.ledger}</LEDGERNAME>
@@ -84,8 +81,20 @@ def build_payment_ledger_xml(doc):
     <AMOUNT>-{amt}</AMOUNT>
 </ALLLEDGERENTRIES.LIST>
 """
+        else:
+            # Cash / Bank (CREDIT)
+            xml += f"""
+<ALLLEDGERENTRIES.LIST>
+    <LEDGERNAME>{row.ledger}</LEDGERNAME>
+    <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+    <AMOUNT>{amt}</AMOUNT>
+</ALLLEDGERENTRIES.LIST>
+"""
 
     return xml
+
+
+
 def push_to_tally(doc, action):
     company, TALLY_URL = get_active_tally_config()
     validate_payment_entries(doc)
