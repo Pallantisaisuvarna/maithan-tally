@@ -6,29 +6,24 @@ from datetime import datetime
 import io
 
 def is_same_voucher(doc, voucher_date, narration, ledger_rows):
-    if doc.date != voucher_date:
+    if doc.date != voucher_date or (doc.narration or "") != (narration or ""):
         return False
-    if (doc.narration or "") != (narration or ""):
-        return False
+
     existing_rows = [
-        {
-            "ledger": r.ledger,
-            "entry_type": r.entry_type,
-            "ledger_amount": float(r.ledger_amount)
-        }
+        {"ledger": r.ledger, "entry_type": r.entry_type, "ledger_amount": float(r.ledger_amount)}
         for r in doc.voucher_ledger_entry
     ]
     if len(existing_rows) != len(ledger_rows):
         return False
+
     def normalize(rows):
-        return sorted(
-            rows,
-            key=lambda x: (x["ledger"], x["entry_type"], x["ledger_amount"])
-        )
+        return sorted(rows, key=lambda x: (x["ledger"], x["entry_type"], x["ledger_amount"]))
+
     return normalize(existing_rows) == normalize(ledger_rows)
 
+
 def sync_contra_vouchers():
-    tally_url = "http://192.168.1.61:9000"
+    tally_url = "http://192.168.1.4:9000"
     tally_payload = """<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
@@ -47,12 +42,7 @@ def sync_contra_vouchers():
           <COLLECTION NAME="VoucherList" ISMODIFY="No">
             <TYPE>Voucher</TYPE>
             <FETCH>
-              VOUCHERNUMBER,
-              DATE,
-              VCHTYPE,
-              VOUCHERTYPENAME,
-              NARRATION,
-              ALLLEDGERENTRIES.LIST
+              VOUCHERNUMBER, DATE, VCHTYPE, VOUCHERTYPENAME, NARRATION, ALLLEDGERENTRIES.LIST
             </FETCH>
           </COLLECTION>
         </TDLMESSAGE>
@@ -83,6 +73,9 @@ def sync_contra_vouchers():
         except:
             return 0.0
 
+    def normalize_voucher_number(vn):
+        return (vn or "").strip().upper()
+
     voucher_map = {
         "Contra": "Contra Voucher",
         "Receipt": "Receipt Voucher",
@@ -94,9 +87,8 @@ def sync_contra_vouchers():
     tally_vouchers_seen = set()
 
     for _, voucher in etree.iterparse(xml, events=("end",), tag="VOUCHER", recover=True):
-        voucher_number = elem_text(voucher, "VOUCHERNUMBER")
+        voucher_number = normalize_voucher_number(elem_text(voucher, "VOUCHERNUMBER"))
         vch_type = voucher.get("VCHTYPE") or elem_text(voucher, "VOUCHERTYPENAME")
-
         if not voucher_number or vch_type not in voucher_map:
             voucher.clear()
             continue
@@ -105,46 +97,40 @@ def sync_contra_vouchers():
         narration = elem_text(voucher, "NARRATION")
         ledger_rows = []
 
-        ledger_entries = voucher.xpath(".//*[local-name()='ALLLEDGERENTRIES.LIST']")
-        for entry in ledger_entries:
+        for entry in voucher.xpath(".//*[local-name()='ALLLEDGERENTRIES.LIST']"):
             ledger_name = elem_text(entry, "LEDGERNAME")
             amt = parse_amount(elem_text(entry, "AMOUNT"))
-
             if not ledger_name or amt == 0:
                 continue
-
-            if amt < 0:
-                ledger_rows.append({
-                    "ledger": ledger_name,
-                    "entry_type": "Debit",
-                    "ledger_amount": abs(amt)
-                })
-            else:
-                ledger_rows.append({
-                    "ledger": ledger_name,
-                    "entry_type": "Credit",
-                    "ledger_amount": amt
-                })
+            ledger_rows.append({
+                "ledger": ledger_name,
+                "entry_type": "Debit" if amt > 0 else "Credit",
+                "ledger_amount": abs(amt)
+            })
 
         if len(ledger_rows) < 2:
             voucher.clear()
             continue
 
         doctype = voucher_map[vch_type]
-        tally_vouchers_seen.add((voucher_number or "").strip().upper())
+        tally_vouchers_seen.add((voucher_number, vch_type))
 
-        existing = frappe.db.exists(doctype, {"voucher_number": voucher_number})
+     
+        existing = frappe.db.exists(doctype, {"voucher_number": voucher_number, "voucher_type": vch_type})
         if existing:
             doc = frappe.get_doc(doctype, existing)
             if not is_same_voucher(doc, voucher_date, narration, ledger_rows):
+               
                 doc.date = voucher_date
                 doc.narration = narration
+                doc.voucher_type = vch_type
                 doc.set("voucher_ledger_entry", [])
                 for row in ledger_rows:
                     doc.append("voucher_ledger_entry", row)
                 doc.flags.from_pull = True
                 doc.save(ignore_permissions=True)
         else:
+           
             doc = frappe.get_doc({
                 "doctype": doctype,
                 "voucher_number": voucher_number,
@@ -158,18 +144,13 @@ def sync_contra_vouchers():
             doc.insert(ignore_permissions=True)
 
         voucher.clear()
+    
 
-    frappe.db.commit()
+ 
+    for doctype_name in voucher_map.values():
+        seen = {(normalize_voucher_number(vn), vt) for vn, vt in tally_vouchers_seen}
 
-    def normalize_voucher_number(vn):
-        return (vn or "").strip().upper()
-
-    tally_vouchers_seen_normalized = {normalize_voucher_number(vn) for vn in tally_vouchers_seen}
-
-    for doctype in voucher_map.values():
-        for d in frappe.get_all(doctype, ["name", "voucher_number"]):
-            if normalize_voucher_number(d.voucher_number) not in tally_vouchers_seen_normalized:
-                frappe.delete_doc(doctype, d.name, ignore_permissions=True)
-
-    frappe.db.commit()
-    return None
+        for d in frappe.get_all(doctype_name, ["name", "voucher_number", "voucher_type"]):
+            if (normalize_voucher_number(d["voucher_number"]), d["voucher_type"]) not in seen:
+                frappe.delete_doc(doctype_name, d["name"], ignore_permissions=True)
+        frappe.db.commit()
