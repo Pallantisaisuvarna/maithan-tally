@@ -4,27 +4,31 @@ import re
 import frappe
 from datetime import datetime
 import io
+import xml.sax.saxutils as saxutils
 
-def is_same_voucher(doc, voucher_date, narration, ledger_rows):
-    if doc.date != voucher_date or (doc.narration or "") != (narration or ""):
-        return False
+def get_frappe_ledger(tally_name):
+    
+    if not tally_name:
+        return None
+        
+    if frappe.db.exists("Ledger", tally_name):
+        return tally_name
+    words = tally_name.split()
+    if len(words) > 1:
+        test_name = f"{words[0]} & {' '.join(words[1:])}"
+        if frappe.db.exists("Ledger", test_name):
+            return test_name
+        test_name_2 = tally_name.replace(" ", " & ")
+        if frappe.db.exists("Ledger", test_name_2):
+            return test_name_2
 
-    existing_rows = [
-        {"ledger": r.ledger, "entry_type": r.entry_type, "ledger_amount": float(r.ledger_amount)}
-        for r in doc.voucher_ledger_entry
-    ]
-    if len(existing_rows) != len(ledger_rows):
-        return False
-
-    def normalize(rows):
-        return sorted(rows, key=lambda x: (x["ledger"], x["entry_type"], x["ledger_amount"]))
-
-    return normalize(existing_rows) == normalize(ledger_rows)
-
+    return tally_name
 
 def sync_contra_vouchers():
-    tally_url = "http://192.168.1.4:9000"
-    tally_payload = """<ENVELOPE>
+    tally_url = "http://192.168.1.48:9000"
+    company_name = "Dummy Company" 
+    
+    tally_payload = f"""<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
     <TALLYREQUEST>Export</TALLYREQUEST>
@@ -34,16 +38,14 @@ def sync_contra_vouchers():
   <BODY>
     <DESC>
       <STATICVARIABLES>
-        <SVCURRENTCOMPANY>Dummy Company</SVCURRENTCOMPANY>
+        <SVCURRENTCOMPANY>{saxutils.escape(company_name)}</SVCURRENTCOMPANY>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
           <COLLECTION NAME="VoucherList" ISMODIFY="No">
             <TYPE>Voucher</TYPE>
-            <FETCH>
-              VOUCHERNUMBER, DATE, VCHTYPE, VOUCHERTYPENAME, NARRATION, ALLLEDGERENTRIES.LIST
-            </FETCH>
+            <FETCH>VOUCHERNUMBER, DATE, VCHTYPE, VOUCHERTYPENAME, NARRATION, ALLLEDGERENTRIES.LIST</FETCH>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
@@ -51,30 +53,22 @@ def sync_contra_vouchers():
   </BODY>
 </ENVELOPE>"""
 
-    response = requests.post(tally_url, data=tally_payload)
-    raw_xml = response.content.decode("utf-8", errors="ignore")
+    try:
+        response = requests.post(tally_url, data=tally_payload, timeout=30)
+        raw_xml = response.content.decode("utf-8", errors="ignore")
+    except Exception as e:
+        frappe.log_error("Tally Sync Connection Error", str(e))
+        return
 
-    def clean_xml(text):
-        return re.sub(r'[\x00-\x1f]', '', text)
+    def clean_text(text):
+        if not text: return ""
+        text = re.sub(r'[\x00-\x1f\x7f-\xff]', '', text)
+        text = saxutils.unescape(text)
+        return " ".join(text.split()).strip()
 
-    def elem_text(elem, name):
-        res = elem.xpath(".//*[local-name()=$n]/text()", n=name)
-        return res[0].strip() if res else ""
-
-    def parse_date(val):
-        try:
-            return datetime.strptime(val, "%Y%m%d").date()
-        except:
-            return None
-
-    def parse_amount(val):
-        try:
-            return float(val)
-        except:
-            return 0.0
-
-    def normalize_voucher_number(vn):
-        return (vn or "").strip().upper()
+    def get_val(elem, tag):
+        res = elem.xpath(f".//*[local-name()='{tag}']/text()")
+        return clean_text(res[0]) if res else ""
 
     voucher_map = {
         "Contra": "Contra Voucher",
@@ -83,74 +77,76 @@ def sync_contra_vouchers():
         "Journal": "Journal Voucher",
     }
 
-    xml = io.BytesIO(clean_xml(raw_xml).encode("utf-8"))
+    parser = etree.XMLParser(recover=True)
+    root = etree.fromstring(raw_xml.encode("utf-8"), parser=parser)
+    
     tally_vouchers_seen = set()
 
-    for _, voucher in etree.iterparse(xml, events=("end",), tag="VOUCHER", recover=True):
-        voucher_number = normalize_voucher_number(elem_text(voucher, "VOUCHERNUMBER"))
-        vch_type = voucher.get("VCHTYPE") or elem_text(voucher, "VOUCHERTYPENAME")
-        if not voucher_number or vch_type not in voucher_map:
-            voucher.clear()
-            continue
-
-        voucher_date = parse_date(elem_text(voucher, "DATE"))
-        narration = elem_text(voucher, "NARRATION")
-        ledger_rows = []
-
-        for entry in voucher.xpath(".//*[local-name()='ALLLEDGERENTRIES.LIST']"):
-            ledger_name = elem_text(entry, "LEDGERNAME")
-            amt = parse_amount(elem_text(entry, "AMOUNT"))
-            if not ledger_name or amt == 0:
+    for voucher in root.xpath("//VOUCHER"):
+        try:
+            v_num = get_val(voucher, "VOUCHERNUMBER").upper()
+            v_type_tally = voucher.get("VCHTYPE") or get_val(voucher, "VOUCHERTYPENAME")
+            
+            if not v_num or v_type_tally not in voucher_map:
                 continue
-            ledger_rows.append({
-                "ledger": ledger_name,
-                "entry_type": "Debit" if amt > 0 else "Credit",
-                "ledger_amount": abs(amt)
-            })
 
-        if len(ledger_rows) < 2:
-            voucher.clear()
-            continue
+            v_date_str = get_val(voucher, "DATE")
+            v_date = datetime.strptime(v_date_str, "%Y%m%d").date() if v_date_str else None
+            v_narration = get_val(voucher, "NARRATION")
+            ledger_rows = []
 
-        doctype = voucher_map[vch_type]
-        tally_vouchers_seen.add((voucher_number, vch_type))
+            for entry in voucher.xpath(".//*[local-name()='ALLLEDGERENTRIES.LIST']"):
+                raw_lname = get_val(entry, "LEDGERNAME")
+                lname = get_frappe_ledger(raw_lname)
+                
+                amt = float(get_val(entry, "AMOUNT") or 0)
+                if not lname or amt == 0: continue
 
-     
-        existing = frappe.db.exists(doctype, {"voucher_number": voucher_number, "voucher_type": vch_type})
-        if existing:
-            doc = frappe.get_doc(doctype, existing)
-            if not is_same_voucher(doc, voucher_date, narration, ledger_rows):
-               
-                doc.date = voucher_date
-                doc.narration = narration
-                doc.voucher_type = vch_type
+                ledger_rows.append({
+                    "ledger": lname,
+                    "entry_type": "Debit" if amt < 0 else "Credit",
+                    "ledger_amount": abs(amt)
+                })
+
+            if len(ledger_rows) < 2: continue
+
+            doctype = voucher_map[v_type_tally]
+            tally_vouchers_seen.add((v_num, v_type_tally))
+
+            existing = frappe.db.exists(doctype, {"voucher_number": v_num, "voucher_type": v_type_tally})
+            
+            if existing:
+                doc = frappe.get_doc(doctype, existing)
+                doc.date = v_date
+                doc.narration = v_narration
                 doc.set("voucher_ledger_entry", [])
                 for row in ledger_rows:
                     doc.append("voucher_ledger_entry", row)
-                doc.flags.from_pull = True
-                doc.save(ignore_permissions=True)
-        else:
-           
-            doc = frappe.get_doc({
-                "doctype": doctype,
-                "voucher_number": voucher_number,
-                "voucher_type": vch_type,
-                "date": voucher_date,
-                "narration": narration,
-                "is_pushed_to_tally": 1,
-                "voucher_ledger_entry": ledger_rows
-            })
+            else:
+                doc = frappe.get_doc({
+                    "doctype": doctype,
+                    "voucher_number": v_num,
+                    "voucher_type": v_type_tally,
+                    "date": v_date,
+                    "narration": v_narration,
+                    "is_pushed_to_tally": 1,
+                    "voucher_ledger_entry": ledger_rows
+                })
+
             doc.flags.from_pull = True
-            doc.insert(ignore_permissions=True)
+            doc.save(ignore_permissions=True)
+            
+        except Exception as e:
+            frappe.log_error(f"Tally Sync Error: Voucher {v_num}", str(e))
+            continue
 
-        voucher.clear()
     
+    for v_tally_name, doctype_frappe in voucher_map.items():
+        local_docs = frappe.get_all(doctype_frappe, 
+                                   filters={"is_pushed_to_tally": 1, "voucher_type": v_tally_name}, 
+                                   fields=["name", "voucher_number"])
+        for d in local_docs:
+            if (d.voucher_number.upper(), v_tally_name) not in tally_vouchers_seen:
+                frappe.delete_doc(doctype_frappe, d.name, ignore_permissions=True)
 
- 
-    for doctype_name in voucher_map.values():
-        seen = {(normalize_voucher_number(vn), vt) for vn, vt in tally_vouchers_seen}
-
-        for d in frappe.get_all(doctype_name, ["name", "voucher_number", "voucher_type"]):
-            if (normalize_voucher_number(d["voucher_number"]), d["voucher_type"]) not in seen:
-                frappe.delete_doc(doctype_name, d["name"], ignore_permissions=True)
-        frappe.db.commit()
+    frappe.db.commit()
