@@ -25,7 +25,7 @@ def get_frappe_ledger(tally_name):
     return tally_name
 
 def sync_contra_vouchers():
-    tally_url = "http://192.168.1.48:9000"
+    tally_url = "http://192.168.1.54:9000"
     company_name = "Dummy Company" 
     
     tally_payload = f"""<ENVELOPE>
