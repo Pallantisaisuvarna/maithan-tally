@@ -7,17 +7,21 @@ from frappe.utils import get_url
 
 class ReceiptVoucher(Document):
     def after_insert(self):
-        if self.is_pushed_to_tally:
+        if self.flags.from_pull or self.is_pushed_to_tally:
             return
+            
         self.flags.from_insert = True
         push_to_tally(self, action="Create")
         self.db_set("is_pushed_to_tally", 1, update_modified=False)
 
     def on_update(self):
+        if self.flags.from_pull:
+            return     
         if self.flags.get("from_insert"):
-            return
+            return  
         if not self.is_pushed_to_tally:
             return
+            
         push_to_tally(self, action="Alter")
 
     def on_trash(self):
@@ -25,6 +29,7 @@ class ReceiptVoucher(Document):
             return
         delete_from_tally(self)
 
+        
 def escape_xml(data):
     if data is None:
         return ""
