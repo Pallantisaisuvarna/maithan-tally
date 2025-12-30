@@ -14,6 +14,7 @@ class JournalVoucher(Document):
         self.db_set("is_pushed_to_tally", 1, update_modified=False)
 
     def on_update(self):
+       
         if self.flags.from_pull:
             return
             
@@ -31,10 +32,19 @@ class JournalVoucher(Document):
         delete_from_tally(self)
 
 def escape_xml(data):
-  
     if data is None:
         return ""
     return saxutils.escape(str(data))
+
+def get_tally_vch_type(doctype):
+    """Maps Frappe Doctype to Tally Voucher Type Name"""
+    mapping = {
+        "Contra Voucher": "Contra",
+        "Journal Voucher": "Journal",
+        "Receipt Voucher": "Receipt",
+        "Payment Voucher": "Payment"
+    }
+    return mapping.get(doctype, "Journal")
 
 def validate_journal_entries(doc):
     if not doc.voucher_ledger_entry or len(doc.voucher_ledger_entry) < 2:
@@ -92,12 +102,11 @@ def get_active_tally_config():
         frappe.throw("No Active Tally Configuration found")
     return config[0].company, config[0].url
 
-
-
 def push_to_tally(doc, action):
     company, TALLY_URL = get_active_tally_config()
-    validate_journal_entries(doc)
+    vch_type = get_tally_vch_type(doc.doctype) # Dynamic Type
     
+    validate_journal_entries(doc)
     ledger_xml = build_ledger_xml(doc)
     
     safe_narration = escape_xml(doc.narration)
@@ -108,23 +117,24 @@ def push_to_tally(doc, action):
 
     if action == "Create":
         voucher_block = f"""
-        <VOUCHER VCHTYPE="Journal" ACTION="Create">
+        <VOUCHER VCHTYPE="{vch_type}" ACTION="Create">
             <DATE>{create_date}</DATE>
             <EFFECTIVEDATE>{create_date}</EFFECTIVEDATE>
-            <VOUCHERTYPENAME>Journal</VOUCHERTYPENAME>
+            <VOUCHERTYPENAME>{vch_type}</VOUCHERTYPENAME>
             <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>
             <VOUCHERNUMBER>{doc.voucher_number}</VOUCHERNUMBER>
             <NARRATION>{safe_narration}</NARRATION>
             {ledger_xml}
         </VOUCHER>"""
     else:
+        
         voucher_block = f"""
-        <VOUCHER VCHTYPE="Journal"
+        <VOUCHER VCHTYPE="{vch_type}"
                  ACTION="Alter"
                  DATE="{alter_date}"
                  TAGNAME="Voucher Number"
                  TAGVALUE="{doc.voucher_number}">
-            <VOUCHERTYPENAME>Journal</VOUCHERTYPENAME>
+            <VOUCHERTYPENAME>{vch_type}</VOUCHERTYPENAME>
             <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>
             <NARRATION>{safe_narration}</NARRATION>
             {ledger_xml}
@@ -161,6 +171,7 @@ def push_to_tally(doc, action):
 
 def delete_from_tally(doc):
     company, TALLY_URL = get_active_tally_config()
+    vch_type = get_tally_vch_type(doc.doctype) 
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%d-%b-%Y")
     
     safe_company = escape_xml(company)
@@ -181,7 +192,7 @@ def delete_from_tally(doc):
         </DESC>
         <DATA>
             <TALLYMESSAGE xmlns:UDF="TallyUDF">
-                <VOUCHER VCHTYPE="Journal"
+                <VOUCHER VCHTYPE="{vch_type}"
                          ACTION="Delete"
                          DATE="{xml_date}"
                          TAGNAME="Voucher Number"

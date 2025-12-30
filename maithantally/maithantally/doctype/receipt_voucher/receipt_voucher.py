@@ -15,10 +15,8 @@ class ReceiptVoucher(Document):
         self.db_set("is_pushed_to_tally", 1, update_modified=False)
 
     def on_update(self):
-        if self.flags.from_pull:
+        if self.flags.from_pull or self.flags.get("from_insert"):
             return     
-        if self.flags.get("from_insert"):
-            return  
         if not self.is_pushed_to_tally:
             return
             
@@ -29,7 +27,6 @@ class ReceiptVoucher(Document):
             return
         delete_from_tally(self)
 
-        
 def escape_xml(data):
     if data is None:
         return ""
@@ -153,6 +150,7 @@ def push_to_tally(doc, action):
                     TAGVALUE="{doc.voucher_number}"
                     ACTION="Alter"
                     VCHTYPE="{vch_type}">
+                    <VOUCHERTYPENAME>{vch_type}</VOUCHERTYPENAME>
                     <NARRATION>{safe_narration}</NARRATION>
                     {ledger_xml}
                 </VOUCHER>
@@ -172,6 +170,7 @@ def delete_from_tally(doc):
     company, TALLY_URL = get_active_tally_config()
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%d-%b-%Y")
     safe_company = escape_xml(company)
+    vch_type = "Receipt"
 
     xml = f"""
 <ENVELOPE>
@@ -194,7 +193,7 @@ def delete_from_tally(doc):
                     TAGNAME="Voucher Number"
                     TAGVALUE="{doc.voucher_number}"
                     ACTION="Delete"
-                    VCHTYPE="Receipt">
+                    VCHTYPE="{vch_type}">
                 </VOUCHER>
             </TALLYMESSAGE>
         </DATA>

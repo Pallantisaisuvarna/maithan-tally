@@ -15,10 +15,7 @@ class PaymentVoucher(Document):
         self.db_set("is_pushed_to_tally", 1, update_modified=False)
 
     def on_update(self):
-        if self.flags.from_pull:
-            return
-            
-        if self.flags.get("from_insert"):
+        if self.flags.from_pull or self.flags.get("from_insert"):
             return
             
         if not self.is_pushed_to_tally:
@@ -153,6 +150,7 @@ def push_to_tally(doc, action):
                     TAGVALUE="{doc.voucher_number}"
                     ACTION="Alter"
                     VCHTYPE="{vch_type}">
+                    <VOUCHERTYPENAME>{vch_type}</VOUCHERTYPENAME>
                     <NARRATION>{safe_narration}</NARRATION>
                     {ledger_xml}
                 </VOUCHER>
@@ -172,6 +170,7 @@ def delete_from_tally(doc):
     company, TALLY_URL = get_active_tally_config()
     xml_date = datetime.strptime(str(doc.date), "%Y-%m-%d").strftime("%d-%b-%Y")
     safe_company = escape_xml(company)
+    vch_type = "Payment"
 
     xml = f"""
 <ENVELOPE>
@@ -194,7 +193,7 @@ def delete_from_tally(doc):
                     TAGNAME="Voucher Number"
                     TAGVALUE="{doc.voucher_number}"
                     ACTION="Delete"
-                    VCHTYPE="Payment">
+                    VCHTYPE="{vch_type}">
                 </VOUCHER>
             </TALLYMESSAGE>
         </DATA>
