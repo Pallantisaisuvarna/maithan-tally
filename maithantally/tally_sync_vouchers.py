@@ -15,7 +15,7 @@ def sync_vouchers_from_tally_frappe_orm():
     """
     
     # ---------------- CONFIGURATION & DATE RANGE ----------------
-    tally_url = "http://192.168.1.3:9000/" 
+    tally_url = "http://192.168.1.35:9000/" 
 
     # --- DATE RANGE FIX: Use standard Python datetime manipulation ---
     # Get today's date using frappe.utils.getdate() or datetime.now().date()
@@ -47,7 +47,8 @@ def sync_vouchers_from_tally_frappe_orm():
             <SVFROMDATE>{tally_from_date}</SVFROMDATE>
             <SVTODATE>{tally_to_date}</SVTODATE>
         </STATICVARIABLES>
-      <TDL><TDLMESSAGE><COLLECTION NAME="VoucherList" ISMODIFY="No"><TYPE>Voucher"><FETCH>
+      <TDL><TDLMESSAGE><COLLECTION NAME="VoucherList" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>
+      
              VOUCHERNUMBER,DATE,VCHTYPE,VOUCHERTYPENAME,NARRATION,
              ALLLEDGERENTRIES.LIST/LEDGERNAME,ALLLEDGERENTRIES.LIST/AMOUNT
           </FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY>

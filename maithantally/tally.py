@@ -3,30 +3,38 @@ from lxml import etree
 import re
 import frappe
 from datetime import datetime
-import io
 import xml.sax.saxutils as saxutils
 
 def get_frappe_ledger(tally_name):
-    
     if not tally_name:
         return None
         
-    if frappe.db.exists("Ledger", tally_name):
-        return tally_name
-    words = tally_name.split()
-    if len(words) > 1:
-        test_name = f"{words[0]} & {' '.join(words[1:])}"
+    # Standardize spaces
+    clean_name = " ".join(tally_name.split()).strip()
+    
+    # 1. Try direct match
+    if frappe.db.exists("Ledger", clean_name):
+        return clean_name
+        
+    # 2. Handle the common '&' character mismatch (e.g., 'Ventures And Industries' vs 'Ventures & Industries')
+    if " and " in clean_name.lower():
+        test_name = re.sub(r'(?i)\sand\s', ' & ', clean_name)
         if frappe.db.exists("Ledger", test_name):
             return test_name
-        test_name_2 = tally_name.replace(" ", " & ")
-        if frappe.db.exists("Ledger", test_name_2):
-            return test_name_2
-
-    return tally_name
+            
+    # 3. Fallback to SQL 'LIKE' for flexible matching
+    match = frappe.db.get_value("Ledger", {"name": ["like", f"%{clean_name}%"]}, "name")
+    return match if match else clean_name
 
 def sync_contra_vouchers():
-    tally_url = "http://192.168.1.54:9000"
+    tally_url = "http://v41066.22055.tallyprimecloud.in:9040/"
+    
+    # CRITICAL: This must match the Tally Title Bar EXACTLY
     company_name = "Dummy Company" 
+    
+    # CHUNKING: Requesting 1 month only to prevent 'Memory Access Violation'
+    start_date = "20260401"
+    end_date = "20260430"
     
     tally_payload = f"""<ENVELOPE>
   <HEADER>
@@ -40,6 +48,8 @@ def sync_contra_vouchers():
       <STATICVARIABLES>
         <SVCURRENTCOMPANY>{saxutils.escape(company_name)}</SVCURRENTCOMPANY>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>{start_date}</SVFROMDATE>
+        <SVTODATE>{end_date}</SVTODATE>
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -54,9 +64,18 @@ def sync_contra_vouchers():
 </ENVELOPE>"""
 
     try:
-        response = requests.post(tally_url, data=tally_payload, timeout=30)
+        # Increased timeout for Tally Cloud stability
+        response = requests.post(tally_url, data=tally_payload, timeout=60)
         raw_xml = response.content.decode("utf-8", errors="ignore")
+        
+        if "<VOUCHER" in raw_xml:
+            v_count = raw_xml.count("<VOUCHER")
+            print(f"SUCCESS: Found {v_count} vouchers. Starting Import...")
+        else:
+            print("WARNING: No Vouchers found. Ensure the Company is open in Tally.")
+            return
     except Exception as e:
+        print(f"CONNECTION ERROR: {str(e)}")
         frappe.log_error("Tally Sync Connection Error", str(e))
         return
 
@@ -79,8 +98,7 @@ def sync_contra_vouchers():
 
     parser = etree.XMLParser(recover=True)
     root = etree.fromstring(raw_xml.encode("utf-8"), parser=parser)
-    
-    tally_vouchers_seen = set()
+    tally_vouchers_seen = 0
 
     for voucher in root.xpath("//VOUCHER"):
         try:
@@ -100,7 +118,8 @@ def sync_contra_vouchers():
                 lname = get_frappe_ledger(raw_lname)
                 
                 amt = float(get_val(entry, "AMOUNT") or 0)
-                if not lname or amt == 0: continue
+                if not lname or amt == 0: 
+                    continue
 
                 ledger_rows.append({
                     "ledger": lname,
@@ -108,11 +127,10 @@ def sync_contra_vouchers():
                     "ledger_amount": abs(amt)
                 })
 
-            if len(ledger_rows) < 2: continue
+            if len(ledger_rows) < 2:
+                continue
 
             doctype = voucher_map[v_type_tally]
-            tally_vouchers_seen.add((v_num, v_type_tally))
-
             existing = frappe.db.exists(doctype, {"voucher_number": v_num, "voucher_type": v_type_tally})
             
             if existing:
@@ -122,6 +140,7 @@ def sync_contra_vouchers():
                 doc.set("voucher_ledger_entry", [])
                 for row in ledger_rows:
                     doc.append("voucher_ledger_entry", row)
+                doc.save(ignore_permissions=True)
             else:
                 doc = frappe.get_doc({
                     "doctype": doctype,
@@ -132,21 +151,15 @@ def sync_contra_vouchers():
                     "is_pushed_to_tally": 1,
                     "voucher_ledger_entry": ledger_rows
                 })
+                doc.flags.from_pull = True
+                doc.insert(ignore_permissions=True)
 
-            doc.flags.from_pull = True
-            doc.save(ignore_permissions=True)
+            tally_vouchers_seen += 1
+            print(f"Synced {v_type_tally} #{v_num}")
             
         except Exception as e:
-            frappe.log_error(f"Tally Sync Error: Voucher {v_num}", str(e))
+            print(f"Error processing voucher: {str(e)}")
             continue
 
-    
-    for v_tally_name, doctype_frappe in voucher_map.items():
-        local_docs = frappe.get_all(doctype_frappe, 
-                                   filters={"is_pushed_to_tally": 1, "voucher_type": v_tally_name}, 
-                                   fields=["name", "voucher_number"])
-        for d in local_docs:
-            if (d.voucher_number.upper(), v_tally_name) not in tally_vouchers_seen:
-                frappe.delete_doc(doctype_frappe, d.name, ignore_permissions=True)
-
     frappe.db.commit()
+    print(f"Import Complete. {tally_vouchers_seen} vouchers synced.")

@@ -195,13 +195,13 @@ doc_events = {
 # }
 
 # hooks.py
-scheduler_events = {
-    "cron": {
-        "51 17 * * *": [  # 17 = 5 PM, 41 = minute
-            "maithantally.tally.sync_contra_vouchers"
-        ]
-    }
-}
+# scheduler_events = {
+#     "cron": {
+#         "51 17 * * *": [  # 17 = 5 PM, 41 = minute
+#             "maithantally.tally.sync_contra_vouchers"
+#         ]
+#     }
+# }
 
 # Testing
 # -------
